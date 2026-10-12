@@ -8,6 +8,27 @@ import cv2
 import numpy as np
 import mediapipe as mp
 
+# Multi-tier fallback for MediaPipe solutions across Python/OS versions
+try:
+    _mp_hands = mp.solutions.hands
+    _mp_draw = mp.solutions.drawing_utils
+    _mp_draw_styles = mp.solutions.drawing_styles
+except (AttributeError, ModuleNotFoundError):
+    try:
+        import mediapipe.python.solutions.hands as _mp_hands
+        import mediapipe.python.solutions.drawing_utils as _mp_draw
+        import mediapipe.python.solutions.drawing_styles as _mp_draw_styles
+    except (AttributeError, ModuleNotFoundError):
+        try:
+            from mediapipe import solutions
+            _mp_hands = solutions.hands
+            _mp_draw = solutions.drawing_utils
+            _mp_draw_styles = solutions.drawing_styles
+        except Exception:
+            _mp_hands = None
+            _mp_draw = None
+            _mp_draw_styles = None
+
 
 class HandDetector:
     def __init__(
@@ -22,7 +43,27 @@ class HandDetector:
         self.detection_con = detection_con
         self.track_con = track_con
 
-        self.mp_hands = mp.solutions.hands
+        if hasattr(mp, "solutions") and hasattr(mp.solutions, "hands"):
+            self.mp_hands = mp.solutions.hands
+            self.mp_draw = mp.solutions.drawing_utils
+            self.mp_draw_styles = mp.solutions.drawing_styles
+        elif _mp_hands is not None:
+            self.mp_hands = _mp_hands
+            self.mp_draw = _mp_draw
+            self.mp_draw_styles = _mp_draw_styles
+        else:
+            try:
+                import mediapipe.python.solutions.hands as h
+                import mediapipe.python.solutions.drawing_utils as d
+                import mediapipe.python.solutions.drawing_styles as ds
+                self.mp_hands = h
+                self.mp_draw = d
+                self.mp_draw_styles = ds
+            except Exception as e:
+                raise ImportError(
+                    f"MediaPipe solutions not found. Please ensure mediapipe==0.10.14 is installed on Python 3.11/3.12: {e}"
+                )
+
         self.hands = self.mp_hands.Hands(
             static_image_mode=self.mode,
             max_num_hands=self.max_hands,
